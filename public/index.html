@@ -382,6 +382,7 @@
         <div class="main-content">
             <div class="tabs">
                 <button class="tab active" onclick="switchTab('search')">🔍 Search Chords</button>
+                <button class="tab" onclick="switchTab('manual')">✍️ Manual Entry</button>
                 <button class="tab" onclick="switchTab('saved')">💾 Saved Songs</button>
             </div>
 
@@ -392,9 +393,46 @@
                         <input type="text" id="search-input" class="search-input" placeholder="Search for songs (e.g., 'Wonderwall', 'Hotel California', 'Кино - Группа крови')">
                         <button class="btn btn-primary" onclick="searchChords()">Search</button>
                     </div>
+                    <div style="margin-top: 10px; padding: 12px; background: #fff3cd; border-radius: 8px; font-size: 14px; color: #856404;">
+                        ℹ️ <strong>Note:</strong> To bypass bot protection, this app acts like a real person browsing the web. Search and chord extraction may take 10-20 seconds. Please be patient!
+                    </div>
                 </div>
 
                 <div id="search-results" class="results"></div>
+            </div>
+
+            <!-- Manual Entry Tab -->
+            <div id="manual-tab" class="tab-content">
+                <div class="search-section">
+                    <h3 style="margin-bottom: 20px; color: #2c3e50;">📝 Add Chord Content Manually</h3>
+                    <p style="margin-bottom: 20px; color: #666;">Paste chord content from any source and save it to your collection.</p>
+                    <form id="manual-form" onsubmit="saveManualSong(event)">
+                        <div class="form-group">
+                            <label class="form-label">Song Title:</label>
+                            <input type="text" id="manual-title" class="form-input" placeholder="Enter song title" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Artist:</label>
+                            <input type="text" id="manual-artist" class="form-input" placeholder="Enter artist name" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Chord Content:</label>
+                            <textarea id="manual-content" class="form-textarea" placeholder="Paste chord content here..." required style="min-height: 300px;"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Source URL (optional):</label>
+                            <input type="url" id="manual-source" class="form-input" placeholder="https://...">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Personal Notes (optional):</label>
+                            <textarea id="manual-notes" class="form-textarea" placeholder="Add your own notes, modifications, or reminders..." style="min-height: 100px;"></textarea>
+                        </div>
+                        <div class="result-actions">
+                            <button type="submit" class="btn btn-success">💾 Save Song</button>
+                            <button type="button" class="btn btn-secondary" onclick="clearManualForm()">Clear Form</button>
+                        </div>
+                    </form>
+                </div>
             </div>
 
             <!-- Saved Songs Tab -->
@@ -493,7 +531,7 @@
                             <div class="result-title">${result.title}</div>
                             <div class="result-artist">by ${result.artist} • ${result.source}</div>
                             <div class="result-actions">
-                                <button class="btn btn-primary" onclick="viewChords('${result.url}', '${result.title}', '${result.artist}')">View Chords</button>
+                                <button class="btn btn-primary" data-url="${result.url.replace(/"/g, '&quot;')}" data-title="${result.title.replace(/"/g, '&quot;')}" data-artist="${result.artist.replace(/"/g, '&quot;')}" onclick="viewChords(this.dataset.url, this.dataset.title, this.dataset.artist, this)">View Chords</button>
                                 <a href="${result.url}" target="_blank" class="btn btn-secondary">Open Original</a>
                             </div>
                         </div>
@@ -508,12 +546,12 @@
         }
 
         // View chord content
-        async function viewChords(url, title, artist) {
-            const resultsDiv = document.getElementById('search-results');
+        async function viewChords(url, title, artist, buttonElement) {
+            const resultItem = buttonElement.closest('.result-item');
             const loadingDiv = document.createElement('div');
             loadingDiv.className = 'loading';
             loadingDiv.innerHTML = '🎵 Loading chord content...';
-            resultsDiv.appendChild(loadingDiv);
+            resultItem.insertAdjacentElement('afterend', loadingDiv);
 
             try {
                 const response = await fetch('/api/extract-chords', {
@@ -531,14 +569,14 @@
                 chordDiv.className = 'result-item';
                 chordDiv.innerHTML = `
                     <div class="result-title">${title}</div>
-                    <div class="result-artist">by ${artist}</div>
+                    <div class="result-artist">${artist}</div>
                     <div class="chord-content">${data.chord_content}</div>
                     <div class="result-actions">
-                        <button class="btn btn-success" onclick="saveSong('${title}', '${artist}', \`${data.chord_content.replace(/`/g, '\\`')}\`, '${url}')">💾 Save Song</button>
+                        <button class="btn btn-success" data-title="${title.replace(/"/g, '&quot;')}" data-artist="${artist.replace(/"/g, '&quot;')}" data-chord-content="${data.chord_content.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" onclick="saveSong(this.dataset.title, this.dataset.artist, this.dataset.chordContent, this.dataset.url)">💾 Save Song</button>
                         <button class="btn btn-secondary" onclick="this.parentElement.parentElement.remove()">Close</button>
                     </div>
                 `;
-                resultsDiv.appendChild(chordDiv);
+                resultItem.insertAdjacentElement('afterend', chordDiv);
             } catch (error) {
                 loadingDiv.innerHTML = '<div class="error">Error loading chord content.</div>';
                 console.error('Chord extraction error:', error);
@@ -546,7 +584,7 @@
         }
 
         // Save song to database
-        async function saveSong(title, artist, chordContent, sourceUrl = '') {
+        async function saveSong(title, artist, chordContent, sourceUrl = '', personalNotes = '') {
             try {
                 const response = await fetch('/api/songs', {
                     method: 'POST',
@@ -558,7 +596,7 @@
                         artist,
                         chord_content: chordContent,
                         source_url: sourceUrl,
-                        personal_notes: ''
+                        personal_notes: personalNotes
                     })
                 });
 
@@ -566,12 +604,15 @@
 
                 if (response.ok) {
                     showMessage('Song saved successfully! Share ID: ' + data.share_id, 'success');
+                    return data;
                 } else {
                     showMessage('Error saving song: ' + data.error, 'error');
+                    throw new Error(data.error);
                 }
             } catch (error) {
                 showMessage('Error saving song. Please try again.', 'error');
                 console.error('Save error:', error);
+                throw error;
             }
         }
 
@@ -607,13 +648,13 @@
                     <div class="result-actions">
                         <button class="btn btn-primary" onclick="editSong(${song.id})">✏️ Edit</button>
                         <button class="btn btn-danger" onclick="deleteSong(${song.id})">🗑️ Delete</button>
-                        <button class="btn btn-success" onclick="shareSong('${song.share_id}', '${song.title}', '${song.artist}')">📤 Share</button>
+                        <button class="btn btn-success" data-share-id="${song.share_id}" data-title="${song.title.replace(/"/g, '&quot;')}" data-artist="${song.artist.replace(/"/g, '&quot;')}" onclick="shareSong(this.dataset.shareId, this.dataset.title, this.dataset.artist)">📤 Share</button>
                     </div>
                     <div class="share-buttons" id="share-${song.id}" style="display: none;">
-                        <a href="https://wa.me/?text=Check out this song: ${song.title} by ${song.artist} ${window.location.origin}/share/${song.share_id}" target="_blank" class="btn btn-whatsapp">WhatsApp</a>
-                        <a href="https://t.me/share/url?url=${window.location.origin}/share/${song.share_id}&text=Check out: ${song.title} by ${song.artist}" target="_blank" class="btn btn-telegram">Telegram</a>
-                        <button class="btn btn-copy" onclick="copyShareLink('${song.share_id}')">Copy Link</button>
-                        ${navigator.share ? `<button class="btn btn-secondary" onclick="nativeShare('${song.title}', '${song.artist}', '${song.share_id}')">Share</button>` : ''}
+                        <a href="https://wa.me/?text=${encodeURIComponent(`Check out this song: ${song.title} by ${song.artist} ${window.location.origin}/share/${song.share_id}`)}" target="_blank" class="btn btn-whatsapp">WhatsApp</a>
+                        <a href="https://t.me/share/url?url=${encodeURIComponent(`${window.location.origin}/share/${song.share_id}`)}&text=${encodeURIComponent(`Check out: ${song.title} by ${song.artist}`)}" target="_blank" class="btn btn-telegram">Telegram</a>
+                        <button class="btn btn-copy" data-share-id="${song.share_id}" onclick="copyShareLink(this.dataset.shareId)">Copy Link</button>
+                        ${navigator.share ? `<button class="btn btn-secondary" data-title="${song.title.replace(/"/g, '&quot;')}" data-artist="${song.artist.replace(/"/g, '&quot;')}" data-share-id="${song.share_id}" onclick="nativeShare(this.dataset.title, this.dataset.artist, this.dataset.shareId)">Share</button>` : ''}
                     </div>
                 </div>
             `).join('');
@@ -808,6 +849,36 @@
                 closeModal();
             }
         });
+
+        // Save manual song
+        async function saveManualSong(event) {
+            event.preventDefault();
+            
+            const title = document.getElementById('manual-title').value.trim();
+            const artist = document.getElementById('manual-artist').value.trim();
+            const chordContent = document.getElementById('manual-content').value.trim();
+            const sourceUrl = document.getElementById('manual-source').value.trim();
+            const personalNotes = document.getElementById('manual-notes').value.trim();
+
+            if (!title || !artist || !chordContent) {
+                showMessage('Please fill in all required fields.', 'error');
+                return;
+            }
+
+            try {
+                await saveSong(title, artist, chordContent, sourceUrl, personalNotes);
+                clearManualForm();
+                showMessage('Song saved successfully! Switch to "Saved Songs" tab to view it.', 'success');
+            } catch (error) {
+                showMessage('Error saving song. Please try again.', 'error');
+                console.error('Manual save error:', error);
+            }
+        }
+
+        // Clear manual form
+        function clearManualForm() {
+            document.getElementById('manual-form').reset();
+        }
 
         // Load saved songs on page load
         document.addEventListener('DOMContentLoaded', () => {

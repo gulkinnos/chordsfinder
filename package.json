@@ -8,15 +8,23 @@
     "dev": "node server.js",
     "test": "node test.js"
   },
-  "keywords": ["guitar", "chords", "music", "web-app"],
+  "keywords": [
+    "guitar",
+    "chords",
+    "music",
+    "web-app"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "better-sqlite3": "^9.2.2",
-    "uuid": "^9.0.1",
-    "cors": "^2.8.5",
+    "axios": "^1.6.2",
+    "better-sqlite3": "^12.6.2",
     "cheerio": "^1.0.0-rc.12",
-    "axios": "^1.6.2"
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "puppeteer": "^24.37.3",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "uuid": "^9.0.1"
   }
 }
